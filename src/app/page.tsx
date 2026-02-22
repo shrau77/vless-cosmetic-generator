@@ -108,7 +108,7 @@ export default function VlessGeneratorPage() {
       setCopiedField(field);
       toast({
         description: 'Скопировано в буфер обмена',
-        duration: 2000
+        
       });
       setTimeout(() => setCopiedField(null), 2000);
     } catch {
@@ -128,7 +128,7 @@ export default function VlessGeneratorPage() {
     }));
     toast({
       description: `Применен пресет: ${preset.name}`,
-      duration: 2000
+      
     });
   }, [toast]);
 
