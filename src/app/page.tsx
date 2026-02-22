@@ -207,19 +207,16 @@ export default function VlessGeneratorPage() {
     
     setIsLoading(true);
     try {
-      const response = await fetch('/api/subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: subscriptionUrl })
-      });
-      
-      const data = await response.json();
+      // Use CORS proxy for static site
+      const corsProxy = 'https://api.allorigins.win/raw?url=';
+      const response = await fetch(corsProxy + encodeURIComponent(subscriptionUrl));
       
       if (!response.ok) {
-        throw new Error(data.error || 'Ошибка загрузки подписки');
+        throw new Error('Ошибка загрузки подписки');
       }
       
-      const configs = parseMultipleVlessUris(data.content);
+      const content = await response.text();
+      const configs = parseMultipleVlessUris(content);
       
       if (configs.length === 0) {
         throw new Error('Подписка не содержит VLESS ссылок');
