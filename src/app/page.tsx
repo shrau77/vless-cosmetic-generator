@@ -1548,28 +1548,29 @@ export default function VlessGeneratorPage() {
                     <CardHeader className="pb-3">
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Download className="w-4 h-4" />
-                        Экспорт
+                        Экспорт ({selectedCount} нод)
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      {/* Format Selection */}
-                      <div className="space-y-2">
-                        <Label className="text-sm">Формат экспорта</Label>
-                        <Select
-                          value={exportFormat}
-                          onValueChange={value => setExportFormat(value as ExportFormat)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="vless-uri">VLESS URI (happ, Hiddify, Karing)</SelectItem>
-                            <SelectItem value="vless-uri-extended">NekoBox/Husi (с косметикой)</SelectItem>
-                            <SelectItem value="karing-json">Karing JSON</SelectItem>
-                            <SelectItem value="xray-json">Xray JSON</SelectItem>
-                            <SelectItem value="singbox-json">Sing-box JSON</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      {/* Format Tabs */}
+                      <Tabs value={exportFormat} onValueChange={v => setExportFormat(v as ExportFormat)}>
+                        <TabsList className="w-full grid grid-cols-3 text-xs">
+                          <TabsTrigger value="vless-uri">VLESS URI</TabsTrigger>
+                          <TabsTrigger value="vless-uri-extended">NekoBox</TabsTrigger>
+                          <TabsTrigger value="karing-json">Karing</TabsTrigger>
+                        </TabsList>
+                        <TabsList className="w-full grid grid-cols-2 text-xs mt-1">
+                          <TabsTrigger value="xray-json">Xray</TabsTrigger>
+                          <TabsTrigger value="singbox-json">Sing-box</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                      
+                      <div className="text-xs text-muted-foreground text-center">
+                        {exportFormat === 'vless-uri' && 'happ, Hiddify, Karing, v2rayNG'}
+                        {exportFormat === 'vless-uri-extended' && 'NekoBox, Husi (с косметикой)'}
+                        {exportFormat === 'karing-json' && 'Karing JSON'}
+                        {exportFormat === 'xray-json' && 'Xray-core JSON'}
+                        {exportFormat === 'singbox-json' && 'Sing-box JSON'}
                       </div>
                       
                       <Button 
@@ -1589,7 +1590,7 @@ export default function VlessGeneratorPage() {
                         className="w-full"
                       >
                         <Copy className="w-4 h-4 mr-2" />
-                        Копировать {selectedCount} ссылок
+                        Копировать
                       </Button>
                       <Button 
                         onClick={() => {
