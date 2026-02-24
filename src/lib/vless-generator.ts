@@ -735,7 +735,7 @@ export function applyCosmeticToConfig(baseConfig: VlessConfig, cosmeticSettings:
 }
 
 // Generate Karing JSON Configuration
-// Karing is a cross-platform client that uses a specific format
+// Karing uses Clash/Mihomo format
 export function generateKaringConfig(config: VlessConfig): string {
   // Build name with cosmetic info
   let remarks = config.name || 'VLESS';
@@ -758,32 +758,35 @@ export function generateKaringConfig(config: VlessConfig): string {
     remarks += ` [${cosmetics.join(', ')}]`;
   }
   
+  // Build proxy object - remove undefined values
+  const proxy: Record<string, unknown> = {
+    name: remarks,
+    type: 'vless',
+    server: config.serverAddress,
+    port: config.port,
+    uuid: config.uuid,
+    network: 'tcp',
+    tls: true,
+    'skip-cert-verify': false,
+    servername: config.sni,
+    'client-fingerprint': 'chrome'
+  };
+  
+  // Add flow only if not 'none'
+  if (config.flow !== 'none') {
+    proxy.flow = config.flow;
+  }
+  
+  // Add Reality options
+  if (config.securityMode === 'reality') {
+    proxy['reality-opts'] = {
+      'public-key': config.realityPublicKey,
+      'short-id': config.realityShortId
+    };
+  }
+  
   const karingConfig = {
-    version: '1',
-    proxies: [
-      {
-        name: remarks,
-        type: 'vless',
-        server: config.serverAddress,
-        port: config.port,
-        uuid: config.uuid,
-        network: 'tcp',
-        tls: true,
-        'skip-cert-verify': false,
-        servername: config.sni,
-        flow: config.flow !== 'none' ? config.flow : undefined,
-        ...(config.securityMode === 'reality' && {
-          'reality-opts': {
-            'public-key': config.realityPublicKey,
-            'short-id': config.realityShortId
-          },
-          'client-fingerprint': 'chrome'
-        }),
-        ...(config.securityMode === 'tls' && {
-          'client-fingerprint': 'chrome'
-        })
-      }
-    ],
+    proxies: [proxy],
     'proxy-groups': [
       {
         name: 'PROXY',
@@ -841,54 +844,58 @@ export function exportMultipleConfigs(configs: VlessConfig[], format: ExportForm
   
   // For JSON formats, return array of configs
   if (format === 'karing-json') {
-    const karingConfig = {
-      version: '1',
-      proxies: configs.map(config => {
-        let remarks = config.name || 'VLESS';
-        const cosmetics: string[] = [];
-        
-        if (config.fragmentationEnabled) {
-          cosmetics.push(`frag:${config.fragmentationPackets}`);
-        }
-        if (config.noiseEnabled) {
-          cosmetics.push(`noise:${config.noiseType}`);
-        }
-        if (config.flow !== 'none') {
-          cosmetics.push(config.flow);
-        }
-        
-        if (cosmetics.length > 0) {
-          remarks += ` [${cosmetics.join(', ')}]`;
-        }
-        
-        return {
-          name: remarks,
-          type: 'vless',
-          server: config.serverAddress,
-          port: config.port,
-          uuid: config.uuid,
-          network: 'tcp',
-          tls: true,
-          'skip-cert-verify': false,
-          servername: config.sni,
-          flow: config.flow !== 'none' ? config.flow : undefined,
-          ...(config.securityMode === 'reality' && {
-            'reality-opts': {
-              'public-key': config.realityPublicKey,
-              'short-id': config.realityShortId
-            },
-            'client-fingerprint': 'chrome'
-          }),
-          ...(config.securityMode === 'tls' && {
-            'client-fingerprint': 'chrome'
-          })
+    const proxies = configs.map(config => {
+      let remarks = config.name || 'VLESS';
+      const cosmetics: string[] = [];
+      
+      if (config.fragmentationEnabled) {
+        cosmetics.push(`frag:${config.fragmentationPackets}`);
+      }
+      if (config.noiseEnabled) {
+        cosmetics.push(`noise:${config.noiseType}`);
+      }
+      if (config.flow !== 'none') {
+        cosmetics.push(config.flow);
+      }
+      
+      if (cosmetics.length > 0) {
+        remarks += ` [${cosmetics.join(', ')}]`;
+      }
+      
+      const proxy: Record<string, unknown> = {
+        name: remarks,
+        type: 'vless',
+        server: config.serverAddress,
+        port: config.port,
+        uuid: config.uuid,
+        network: 'tcp',
+        tls: true,
+        'skip-cert-verify': false,
+        servername: config.sni,
+        'client-fingerprint': 'chrome'
+      };
+      
+      if (config.flow !== 'none') {
+        proxy.flow = config.flow;
+      }
+      
+      if (config.securityMode === 'reality') {
+        proxy['reality-opts'] = {
+          'public-key': config.realityPublicKey,
+          'short-id': config.realityShortId
         };
-      }),
+      }
+      
+      return proxy;
+    });
+    
+    const karingConfig = {
+      proxies: proxies,
       'proxy-groups': [
         {
           name: 'PROXY',
           type: 'select',
-          proxies: configs.map(c => c.name || 'VLESS')
+          proxies: proxies.map(p => p.name as string)
         }
       ],
       rules: [
