@@ -1593,7 +1593,7 @@ export default function VlessGeneratorPage() {
                       <div className="text-xs text-muted-foreground text-center">
                         {exportFormat === 'vless-uri' && 'happ, Hiddify, Karing, v2rayNG'}
                         {exportFormat === 'vless-uri-extended' && 'NekoBox, Husi (с косметикой)'}
-                        {exportFormat === 'karing-json' && 'Karing JSON'}
+                        {exportFormat === 'karing-json' && 'Karing YAML (Clash/Mihomo)'}
                         {exportFormat === 'xray-json' && 'Xray-core JSON'}
                         {exportFormat === 'singbox-json' && 'Sing-box JSON'}
                       </div>
@@ -1628,8 +1628,11 @@ export default function VlessGeneratorPage() {
                             selectedNodes.map(n => n.config), 
                             exportFormat
                           );
-                          const ext = exportFormat.includes('json') ? 'json' : 'txt';
-                          const blob = new Blob([output], { type: ext === 'json' ? 'application/json' : 'text/plain' });
+                          const isYaml = exportFormat === 'karing-json';
+                          const isJson = exportFormat.includes('json') && !isYaml;
+                          const ext = isYaml ? 'yaml' : isJson ? 'json' : 'txt';
+                          const mimeType = isYaml ? 'text/yaml' : isJson ? 'application/json' : 'text/plain';
+                          const blob = new Blob([output], { type: mimeType });
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');
                           a.href = url;

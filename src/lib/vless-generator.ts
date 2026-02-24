@@ -734,8 +734,8 @@ export function applyCosmeticToConfig(baseConfig: VlessConfig, cosmeticSettings:
   };
 }
 
-// Generate Karing JSON Configuration
-// Karing uses Clash/Mihomo format
+// Generate Karing/Clash YAML Configuration
+// Karing uses Clash/Mihomo YAML format, not JSON
 export function generateKaringConfig(config: VlessConfig): string {
   // Build name with cosmetic info
   let remarks = config.name || 'VLESS';
@@ -758,49 +758,40 @@ export function generateKaringConfig(config: VlessConfig): string {
     remarks += ` [${cosmetics.join(', ')}]`;
   }
   
-  // Build proxy object - remove undefined values
-  const proxy: Record<string, unknown> = {
-    name: remarks,
-    type: 'vless',
-    server: config.serverAddress,
-    port: config.port,
-    uuid: config.uuid,
-    network: 'tcp',
-    tls: true,
-    'skip-cert-verify': false,
-    servername: config.sni,
-    'client-fingerprint': 'chrome'
-  };
+  // Generate YAML format for Clash/Mihomo
+  let yaml = `proxies:\n`;
+  yaml += `  - name: "${remarks}"\n`;
+  yaml += `    type: vless\n`;
+  yaml += `    server: ${config.serverAddress}\n`;
+  yaml += `    port: ${config.port}\n`;
+  yaml += `    uuid: ${config.uuid}\n`;
+  yaml += `    network: tcp\n`;
+  yaml += `    tls: true\n`;
+  yaml += `    skip-cert-verify: false\n`;
+  yaml += `    servername: ${config.sni}\n`;
+  yaml += `    client-fingerprint: chrome\n`;
   
-  // Add flow only if not 'none'
   if (config.flow !== 'none') {
-    proxy.flow = config.flow;
+    yaml += `    flow: ${config.flow}\n`;
   }
   
-  // Add Reality options
   if (config.securityMode === 'reality') {
-    proxy['reality-opts'] = {
-      'public-key': config.realityPublicKey,
-      'short-id': config.realityShortId
-    };
+    yaml += `    reality-opts:\n`;
+    yaml += `      public-key: ${config.realityPublicKey}\n`;
+    yaml += `      short-id: ${config.realityShortId}\n`;
   }
   
-  const karingConfig = {
-    proxies: [proxy],
-    'proxy-groups': [
-      {
-        name: 'PROXY',
-        type: 'select',
-        proxies: [remarks]
-      }
-    ],
-    rules: [
-      'GEOIP,LAN,DIRECT',
-      'MATCH,PROXY'
-    ]
-  };
+  yaml += `\nproxy-groups:\n`;
+  yaml += `  - name: "PROXY"\n`;
+  yaml += `    type: select\n`;
+  yaml += `    proxies:\n`;
+  yaml += `      - "${remarks}"\n`;
   
-  return JSON.stringify(karingConfig, null, 2);
+  yaml += `\nrules:\n`;
+  yaml += `  - GEOIP,LAN,DIRECT\n`;
+  yaml += `  - MATCH,PROXY\n`;
+  
+  return yaml;
 }
 
 // Generate Hiddify compatible config (single proxy entry)
@@ -842,9 +833,12 @@ export function exportMultipleConfigs(configs: VlessConfig[], format: ExportForm
     return configs.map(c => generator(c)).join('\n');
   }
   
-  // For JSON formats, return array of configs
+  // For Karing YAML format
   if (format === 'karing-json') {
-    const proxies = configs.map(config => {
+    let yaml = `proxies:\n`;
+    const names: string[] = [];
+    
+    for (const config of configs) {
       let remarks = config.name || 'VLESS';
       const cosmetics: string[] = [];
       
@@ -861,49 +855,44 @@ export function exportMultipleConfigs(configs: VlessConfig[], format: ExportForm
       if (cosmetics.length > 0) {
         remarks += ` [${cosmetics.join(', ')}]`;
       }
+      names.push(remarks);
       
-      const proxy: Record<string, unknown> = {
-        name: remarks,
-        type: 'vless',
-        server: config.serverAddress,
-        port: config.port,
-        uuid: config.uuid,
-        network: 'tcp',
-        tls: true,
-        'skip-cert-verify': false,
-        servername: config.sni,
-        'client-fingerprint': 'chrome'
-      };
+      yaml += `  - name: "${remarks}"\n`;
+      yaml += `    type: vless\n`;
+      yaml += `    server: ${config.serverAddress}\n`;
+      yaml += `    port: ${config.port}\n`;
+      yaml += `    uuid: ${config.uuid}\n`;
+      yaml += `    network: tcp\n`;
+      yaml += `    tls: true\n`;
+      yaml += `    skip-cert-verify: false\n`;
+      yaml += `    servername: ${config.sni}\n`;
+      yaml += `    client-fingerprint: chrome\n`;
       
       if (config.flow !== 'none') {
-        proxy.flow = config.flow;
+        yaml += `    flow: ${config.flow}\n`;
       }
       
       if (config.securityMode === 'reality') {
-        proxy['reality-opts'] = {
-          'public-key': config.realityPublicKey,
-          'short-id': config.realityShortId
-        };
+        yaml += `    reality-opts:\n`;
+        yaml += `      public-key: ${config.realityPublicKey}\n`;
+        yaml += `      short-id: ${config.realityShortId}\n`;
       }
-      
-      return proxy;
-    });
+      yaml += `\n`;
+    }
     
-    const karingConfig = {
-      proxies: proxies,
-      'proxy-groups': [
-        {
-          name: 'PROXY',
-          type: 'select',
-          proxies: proxies.map(p => p.name as string)
-        }
-      ],
-      rules: [
-        'GEOIP,LAN,DIRECT',
-        'MATCH,PROXY'
-      ]
-    };
-    return JSON.stringify(karingConfig, null, 2);
+    yaml += `proxy-groups:\n`;
+    yaml += `  - name: "PROXY"\n`;
+    yaml += `    type: select\n`;
+    yaml += `    proxies:\n`;
+    for (const name of names) {
+      yaml += `      - "${name}"\n`;
+    }
+    
+    yaml += `\nrules:\n`;
+    yaml += `  - GEOIP,LAN,DIRECT\n`;
+    yaml += `  - MATCH,PROXY\n`;
+    
+    return yaml;
   }
   
   // For other JSON formats, return first config only (single config export)
