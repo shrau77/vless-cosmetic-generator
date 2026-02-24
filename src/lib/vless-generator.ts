@@ -212,7 +212,8 @@ export function parseMultipleVlessUris(text: string): VlessConfig[] {
   return configs;
 }
 
-// Generate VLESS URI with cosmetic parameters
+// Generate VLESS URI - standard format (compatible with happ, Karing, Hiddify, etc.)
+// This generates a clean VLESS URI without non-standard cosmetic parameters
 export function generateVlessUri(config: VlessConfig): string {
   const params = new URLSearchParams();
   
@@ -242,21 +243,71 @@ export function generateVlessUri(config: VlessConfig): string {
     params.set('flow', config.flow);
   }
   
-  // Cosmetic settings - fragment parameters (Xray-core / NekoBox style)
+  // Build name with cosmetic info (in remarks only, not in URI params)
+  let remarks = config.name || 'VLESS';
+  const cosmetics: string[] = [];
+  
   if (config.fragmentationEnabled) {
-    // Формат для NekoBox/v2rayNG: fragment=packets,length
-    const fragmentValue = `${config.fragmentationPackets},${config.fragmentationLength}`;
-    params.set('fragment', fragmentValue);
-    // Альтернативные параметры для совместимости
-    params.set('fragmentPackets', config.fragmentationPackets);
-    params.set('fragmentLength', config.fragmentationLength);
+    cosmetics.push(`frag:${config.fragmentationPackets}`);
+  }
+  if (config.noiseEnabled) {
+    cosmetics.push(`noise:${config.noiseType}`);
+  }
+  if (config.mtu !== 'default') {
+    cosmetics.push(`mtu:${config.mtu}`);
+  }
+  if (config.flow !== 'none') {
+    cosmetics.push(config.flow);
   }
   
-  // Noise settings
+  if (cosmetics.length > 0) {
+    remarks += ` [${cosmetics.join(', ')}]`;
+  }
+  
+  const uri = `vless://${config.uuid}@${config.serverAddress}:${config.port}?${params.toString()}#${encodeURIComponent(remarks)}`;
+  return uri;
+}
+
+// Generate VLESS URI with NekoBox/Husi extended format (includes cosmetic params)
+// Only use this for NekoBox, Husi, v2rayNG which support these extensions
+export function generateVlessUriExtended(config: VlessConfig): string {
+  const params = new URLSearchParams();
+  
+  // Security settings
+  params.set('security', config.securityMode);
+  params.set('type', 'tcp');
+  
+  if (config.sni) {
+    params.set('sni', config.sni);
+  }
+  
+  if (config.securityMode === 'reality') {
+    if (config.realityPublicKey) {
+      params.set('pbk', config.realityPublicKey);
+    }
+    if (config.realityShortId) {
+      params.set('sid', config.realityShortId);
+    }
+    if (config.realitySpiderX) {
+      params.set('spx', config.realitySpiderX);
+    }
+    params.set('fp', 'chrome');
+  }
+  
+  // Flow control
+  if (config.flow !== 'none') {
+    params.set('flow', config.flow);
+  }
+  
+  // Cosmetic settings - NekoBox/Husi extended format
+  if (config.fragmentationEnabled) {
+    // NekoBox format: fragment=packets,length
+    params.set('fragment', `${config.fragmentationPackets},${config.fragmentationLength}`);
+  }
+  
+  // Noise settings (NekoBox specific)
   if (config.noiseEnabled) {
     params.set('noise', `${config.noiseType},${config.noisePacketCount}`);
-    params.set('noiseType', config.noiseType);
-    params.set('noisePacketCount', config.noisePacketCount);
   }
   
   // MTU setting
@@ -354,10 +405,10 @@ export function generateXrayConfig(config: VlessConfig): string {
           }),
           ...(config.fragmentationEnabled && {
             sockopt: {
-              dialerProxy: 'fragment',
-              tcpKeepAliveInterval: config.tcpKeepAlive ? config.tcpKeepAliveInterval : undefined,
-              tcpFastOpen: config.tcpFastOpen,
-              tcpNoDelay: config.tcpNoDelay,
+              'dialer-proxy': 'fragment',
+              'tcp-keep-alive-interval': config.tcpKeepAlive ? config.tcpKeepAliveInterval : undefined,
+              'tcp-fast-open': config.tcpFastOpen,
+              'tcp-no-delay': config.tcpNoDelay,
               ...(config.mtu !== 'default' && { mtu: parseInt(config.mtu) })
             }
           })
@@ -441,6 +492,43 @@ export function generateXrayConfig(config: VlessConfig): string {
 
 // Generate Sing-box JSON Configuration
 export function generateSingboxConfig(config: VlessConfig): string {
+  // Build the VLESS outbound
+  const vlessOutbound: Record<string, unknown> = {
+    type: 'vless',
+    tag: 'proxy',
+    server: config.serverAddress,
+    server_port: config.port,
+    uuid: config.uuid,
+    flow: config.flow !== 'none' ? config.flow : undefined,
+    transport: {
+      type: 'tcp'
+    },
+    tls: {
+      enabled: true,
+      server_name: config.sni,
+      ...(config.securityMode === 'reality' && {
+        reality: {
+          enabled: true,
+          public_key: config.realityPublicKey,
+          short_id: config.realityShortId
+        },
+        utls: {
+          enabled: true,
+          fingerprint: 'chrome'
+        }
+      }),
+      ...(config.securityMode === 'tls' && {
+        utls: {
+          enabled: true,
+          fingerprint: 'chrome'
+        }
+      })
+    },
+    tcp_fast_open: config.tcpFastOpen,
+    tcp_multi_path: false,
+    udp_over_tcp: false
+  };
+  
   const singboxConfig: Record<string, unknown> = {
     log: {
       level: 'warn',
@@ -490,63 +578,16 @@ export function generateSingboxConfig(config: VlessConfig): string {
       }
     ],
     outbounds: [
-      {
-        type: 'vless',
-        tag: 'proxy',
-        server: config.serverAddress,
-        server_port: config.port,
-        uuid: config.uuid,
-        flow: config.flow !== 'none' ? config.flow : undefined,
-        transport: {
-          type: 'tcp'
-        },
-        tls: {
-          enabled: true,
-          server_name: config.sni,
-          ...(config.securityMode === 'reality' && {
-            reality: {
-              enabled: true,
-              public_key: config.realityPublicKey,
-              short_id: config.realityShortId
-            },
-            utls: {
-              enabled: true,
-              fingerprint: 'chrome'
-            }
-          }),
-          ...(config.securityMode === 'tls' && {
-            utls: {
-              enabled: true,
-              fingerprint: 'chrome'
-            }
-          })
-        },
-        tcp_fast_open: config.tcpFastOpen,
-        tcp_multi_path: false,
-        udp_over_tcp: false
-      }
+      vlessOutbound,
+      { type: 'direct', tag: 'direct' },
+      { type: 'block', tag: 'block' },
+      { type: 'dns', tag: 'dns-out' }
     ]
   };
   
-  // Add fragmentation if enabled (via separate detour)
-  if (config.fragmentationEnabled) {
-    const outbounds = singboxConfig.outbounds as Array<Record<string, unknown>>;
-    // Modify the proxy outbound to use fragment detour
-    const proxyOutbound = outbounds[0] as Record<string, unknown>;
-    proxyOutbound.detour = 'fragment';
-    
-    outbounds.push({
-      type: 'http',
-      tag: 'fragment',
-      transport: {
-        type: 'tcp',
-        headers: {
-          'Fragment-Length': config.fragmentationLength,
-          'Fragment-Packets': config.fragmentationPackets
-        }
-      }
-    });
-  }
+  // Note: Sing-box does not support packet fragmentation like Xray-core.
+  // Fragmentation settings are stored in remarks but not applied in config.
+  // For DPI bypass with Sing-box, consider using XTLS Vision flow or external tools.
   
   // Add routing
   singboxConfig.route = {
@@ -559,11 +600,6 @@ export function generateSingboxConfig(config: VlessConfig): string {
     final: 'proxy',
     auto_detect_interface: true
   };
-  
-  const outbounds = singboxConfig.outbounds as Array<Record<string, unknown>>;
-  outbounds.push({ type: 'direct', tag: 'direct' });
-  outbounds.push({ type: 'block', tag: 'block' });
-  outbounds.push({ type: 'dns', tag: 'dns-out' });
   
   return JSON.stringify(singboxConfig, null, 2);
 }
@@ -679,4 +715,177 @@ export function applyCosmeticToConfig(baseConfig: VlessConfig, cosmeticSettings:
     ...baseConfig,
     ...cosmeticSettings
   };
+}
+
+// Generate Karing JSON Configuration
+// Karing is a cross-platform client that uses a specific format
+export function generateKaringConfig(config: VlessConfig): string {
+  // Build name with cosmetic info
+  let remarks = config.name || 'VLESS';
+  const cosmetics: string[] = [];
+  
+  if (config.fragmentationEnabled) {
+    cosmetics.push(`frag:${config.fragmentationPackets}`);
+  }
+  if (config.noiseEnabled) {
+    cosmetics.push(`noise:${config.noiseType}`);
+  }
+  if (config.mtu !== 'default') {
+    cosmetics.push(`mtu:${config.mtu}`);
+  }
+  if (config.flow !== 'none') {
+    cosmetics.push(config.flow);
+  }
+  
+  if (cosmetics.length > 0) {
+    remarks += ` [${cosmetics.join(', ')}]`;
+  }
+  
+  const karingConfig = {
+    version: '1',
+    proxies: [
+      {
+        name: remarks,
+        type: 'vless',
+        server: config.serverAddress,
+        port: config.port,
+        uuid: config.uuid,
+        network: 'tcp',
+        tls: true,
+        'skip-cert-verify': false,
+        servername: config.sni,
+        flow: config.flow !== 'none' ? config.flow : undefined,
+        ...(config.securityMode === 'reality' && {
+          'reality-opts': {
+            'public-key': config.realityPublicKey,
+            'short-id': config.realityShortId
+          },
+          'client-fingerprint': 'chrome'
+        }),
+        ...(config.securityMode === 'tls' && {
+          'client-fingerprint': 'chrome'
+        })
+      }
+    ],
+    'proxy-groups': [
+      {
+        name: 'PROXY',
+        type: 'select',
+        proxies: [remarks]
+      }
+    ],
+    rules: [
+      'GEOIP,LAN,DIRECT',
+      'MATCH,PROXY'
+    ]
+  };
+  
+  return JSON.stringify(karingConfig, null, 2);
+}
+
+// Generate Hiddify compatible config (single proxy entry)
+export function generateHiddifyConfig(config: VlessConfig): string {
+  // Hiddify uses standard VLESS URI format
+  return generateVlessUri(config);
+}
+
+// Export format types
+export type ExportFormat = 
+  | 'vless-uri'          // Standard VLESS URI (happ, Hiddify, Karing)
+  | 'vless-uri-extended' // Extended URI with cosmetic params (NekoBox, Husi, v2rayNG)
+  | 'xray-json'          // Xray-core JSON
+  | 'singbox-json'       // Sing-box JSON
+  | 'karing-json';       // Karing JSON
+
+// Get export for specific format
+export function exportConfig(config: VlessConfig, format: ExportFormat): string {
+  switch (format) {
+    case 'vless-uri':
+      return generateVlessUri(config);
+    case 'vless-uri-extended':
+      return generateVlessUriExtended(config);
+    case 'xray-json':
+      return generateXrayConfig(config);
+    case 'singbox-json':
+      return generateSingboxConfig(config);
+    case 'karing-json':
+      return generateKaringConfig(config);
+    default:
+      return generateVlessUri(config);
+  }
+}
+
+// Export multiple configs
+export function exportMultipleConfigs(configs: VlessConfig[], format: ExportFormat): string {
+  if (format === 'vless-uri' || format === 'vless-uri-extended') {
+    const generator = format === 'vless-uri' ? generateVlessUri : generateVlessUriExtended;
+    return configs.map(c => generator(c)).join('\n');
+  }
+  
+  // For JSON formats, return array of configs
+  if (format === 'karing-json') {
+    const karingConfig = {
+      version: '1',
+      proxies: configs.map(config => {
+        let remarks = config.name || 'VLESS';
+        const cosmetics: string[] = [];
+        
+        if (config.fragmentationEnabled) {
+          cosmetics.push(`frag:${config.fragmentationPackets}`);
+        }
+        if (config.noiseEnabled) {
+          cosmetics.push(`noise:${config.noiseType}`);
+        }
+        if (config.flow !== 'none') {
+          cosmetics.push(config.flow);
+        }
+        
+        if (cosmetics.length > 0) {
+          remarks += ` [${cosmetics.join(', ')}]`;
+        }
+        
+        return {
+          name: remarks,
+          type: 'vless',
+          server: config.serverAddress,
+          port: config.port,
+          uuid: config.uuid,
+          network: 'tcp',
+          tls: true,
+          'skip-cert-verify': false,
+          servername: config.sni,
+          flow: config.flow !== 'none' ? config.flow : undefined,
+          ...(config.securityMode === 'reality' && {
+            'reality-opts': {
+              'public-key': config.realityPublicKey,
+              'short-id': config.realityShortId
+            },
+            'client-fingerprint': 'chrome'
+          }),
+          ...(config.securityMode === 'tls' && {
+            'client-fingerprint': 'chrome'
+          })
+        };
+      }),
+      'proxy-groups': [
+        {
+          name: 'PROXY',
+          type: 'select',
+          proxies: configs.map(c => c.name || 'VLESS')
+        }
+      ],
+      rules: [
+        'GEOIP,LAN,DIRECT',
+        'MATCH,PROXY'
+      ]
+    };
+    return JSON.stringify(karingConfig, null, 2);
+  }
+  
+  // For other JSON formats, return first config only (single config export)
+  if (configs.length > 0) {
+    return exportConfig(configs[0], format);
+  }
+  
+  return '';
 }

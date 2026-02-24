@@ -43,8 +43,13 @@ import {
   defaultConfig,
   generateUuid,
   generateVlessUri,
+  generateVlessUriExtended,
   generateXrayConfig,
   generateSingboxConfig,
+  generateKaringConfig,
+  exportConfig,
+  exportMultipleConfigs,
+  ExportFormat,
   parseVlessUri,
   parseMultipleVlessUris,
   presets,
@@ -91,6 +96,7 @@ export default function VlessGeneratorPage() {
   
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('vless-uri');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update config field
@@ -334,8 +340,11 @@ export default function VlessGeneratorPage() {
 
   // Generate outputs
   const vlessUri = errors.length === 0 ? generateVlessUri(config) : '';
+  const vlessUriExtended = errors.length === 0 ? generateVlessUriExtended(config) : '';
   const xrayConfig = errors.length === 0 ? generateXrayConfig(config) : '';
   const singboxConfig = errors.length === 0 ? generateSingboxConfig(config) : '';
+  const karingConfig = errors.length === 0 ? generateKaringConfig(config) : '';
+
 
   // Статистика
   const selectedCount = nodes.filter(n => n.selected).length;
@@ -924,16 +933,18 @@ export default function VlessGeneratorPage() {
                     </CardHeader>
                     <CardContent>
                       <Tabs defaultValue="vless" className="w-full">
-                        <TabsList className="w-full grid grid-cols-3">
+                        <TabsList className="w-full grid grid-cols-5">
                           <TabsTrigger value="vless">VLESS URI</TabsTrigger>
-                          <TabsTrigger value="xray">Xray JSON</TabsTrigger>
+                          <TabsTrigger value="vless-ext">NekoBox</TabsTrigger>
+                          <TabsTrigger value="xray">Xray</TabsTrigger>
                           <TabsTrigger value="singbox">Sing-box</TabsTrigger>
+                          <TabsTrigger value="karing">Karing</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="vless" className="mt-4">
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <Label className="text-sm text-muted-foreground">VLESS ссылка для импорта</Label>
+                              <Label className="text-sm text-muted-foreground">VLESS ссылка (happ, Hiddify, Karing, v2rayNG)</Label>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1021,6 +1032,71 @@ export default function VlessGeneratorPage() {
                             <ScrollArea className="h-64 rounded-md border bg-muted/50 p-3">
                               <pre className="text-xs font-mono whitespace-pre-wrap">
                                 {singboxConfig || 'Заполните все обязательные поля...'}
+                              </pre>
+                            </ScrollArea>
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent value="vless-ext" className="mt-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm text-muted-foreground">VLESS с косметикой (NekoBox, Husi)</Label>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(vlessUriExtended, 'vless-ext')}
+                                disabled={errors.length > 0}
+                                className="gap-1"
+                              >
+                                {copiedField === 'vless-ext' ? (
+                                  <>
+                                    <Check className="w-4 h-4 text-green-500" />
+                                    Скопировано
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-4 h-4" />
+                                    Копировать
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            <ScrollArea className="h-32 rounded-md border bg-muted/50 p-3">
+                              <pre className="text-xs font-mono break-all whitespace-pre-wrap">
+                                {vlessUriExtended || 'Заполните все обязательные поля...'}
+                              </pre>
+                            </ScrollArea>
+                            <p className="text-xs text-muted-foreground">⚠️ Только для NekoBox, Husi - содержит расширенные параметры фрагментации</p>
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent value="karing" className="mt-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm text-muted-foreground">Конфигурация Karing</Label>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(karingConfig, 'karing')}
+                                disabled={errors.length > 0}
+                                className="gap-1"
+                              >
+                                {copiedField === 'karing' ? (
+                                  <>
+                                    <Check className="w-4 h-4 text-green-500" />
+                                    Скопировано
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-4 h-4" />
+                                    Копировать
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            <ScrollArea className="h-64 rounded-md border bg-muted/50 p-3">
+                              <pre className="text-xs font-mono whitespace-pre-wrap">
+                                {karingConfig || 'Заполните все обязательные поля...'}
                               </pre>
                             </ScrollArea>
                           </div>
