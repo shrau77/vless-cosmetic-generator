@@ -194,9 +194,26 @@ export function parseVlessUri(uri: string): VlessConfig | null {
   }
 }
 
-// Parse multiple VLESS URIs from text
+// Parse multiple VLESS URIs from text (supports base64 encoded content)
 export function parseMultipleVlessUris(text: string): VlessConfig[] {
-  const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l);
+  let content = text.trim();
+  
+  // Try to decode base64 if content doesn't look like plain URIs
+  if (!content.includes('vless://') && !content.includes('vmess://') && !content.includes('trojan://')) {
+    try {
+      // Remove whitespace and decode base64
+      const cleanBase64 = content.replace(/[\r\n\s]/g, '');
+      const decoded = atob(cleanBase64);
+      // Check if decoded content looks like URIs
+      if (decoded.includes('vless://') || decoded.includes('vmess://') || decoded.includes('trojan://')) {
+        content = decoded;
+      }
+    } catch {
+      // Not base64, use original content
+    }
+  }
+  
+  const lines = content.split(/[\r\n]+/).map(l => l.trim()).filter(l => l);
   const configs: VlessConfig[] = [];
   
   for (const line of lines) {
