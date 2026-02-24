@@ -212,42 +212,67 @@ export default function VlessGeneratorPage() {
     }
     
     setIsLoading(true);
-    try {
-      // Use CORS proxy for static site
-      const corsProxy = 'https://api.allorigins.win/raw?url=';
-      const response = await fetch(corsProxy + encodeURIComponent(subscriptionUrl));
-      
-      if (!response.ok) {
-        throw new Error('Ошибка загрузки подписки');
+    
+    // List of CORS proxies to try
+    const corsProxies = [
+      (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    ];
+    
+    let lastError: string = '';
+    
+    for (const getProxyUrl of corsProxies) {
+      try {
+        const proxyUrl = getProxyUrl(subscriptionUrl);
+        const response = await fetch(proxyUrl);
+        
+        if (!response.ok) {
+          lastError = `HTTP ${response.status}`;
+          continue;
+        }
+        
+        const content = await response.text();
+        
+        if (!content || content.length < 10) {
+          lastError = 'Пустой ответ';
+          continue;
+        }
+        
+        const configs = parseMultipleVlessUris(content);
+        
+        if (configs.length === 0) {
+          lastError = 'Не найдено VLESS ссылок';
+          continue;
+        }
+        
+        const newNodes: NodeItem[] = configs.map((cfg, index) => ({
+          id: `sub-${Date.now()}-${index}`,
+          config: cfg,
+          selected: true,
+          originalUri: generateVlessUri(cfg)
+        }));
+        
+        setNodes(prev => [...prev, ...newNodes]);
+        setSubscriptionUrl('');
+        toast({
+          description: `Импортировано ${configs.length} нод из подписки`
+        });
+        setIsLoading(false);
+        return; // Success!
+        
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'Ошибка сети';
+        continue;
       }
-      
-      const content = await response.text();
-      const configs = parseMultipleVlessUris(content);
-      
-      if (configs.length === 0) {
-        throw new Error('Подписка не содержит VLESS ссылок');
-      }
-      
-      const newNodes: NodeItem[] = configs.map((cfg, index) => ({
-        id: `sub-${Date.now()}-${index}`,
-        config: cfg,
-        selected: true,
-        originalUri: generateVlessUri(cfg)
-      }));
-      
-      setNodes(prev => [...prev, ...newNodes]);
-      setSubscriptionUrl('');
-      toast({
-        description: `Импортировано ${configs.length} нод из подписки`
-      });
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        description: error instanceof Error ? error.message : 'Ошибка загрузки подписки'
-      });
-    } finally {
-      setIsLoading(false);
     }
+    
+    // All proxies failed
+    toast({
+      variant: 'destructive',
+      description: `Не удалось загрузить: ${lastError}. Попробуйте вставить ссылки вручную.`
+    });
+    setIsLoading(false);
   }, [subscriptionUrl, toast]);
 
   // Удалить ноду
