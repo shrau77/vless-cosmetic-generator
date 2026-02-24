@@ -1551,12 +1551,70 @@ export default function VlessGeneratorPage() {
                         Экспорт
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                      <Button onClick={exportSelected} variant="default" className="w-full">
+                    <CardContent className="space-y-3">
+                      {/* Format Selection */}
+                      <div className="space-y-2">
+                        <Label className="text-sm">Формат экспорта</Label>
+                        <Select
+                          value={exportFormat}
+                          onValueChange={value => setExportFormat(value as ExportFormat)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="vless-uri">VLESS URI (happ, Hiddify, Karing)</SelectItem>
+                            <SelectItem value="vless-uri-extended">NekoBox/Husi (с косметикой)</SelectItem>
+                            <SelectItem value="karing-json">Karing JSON</SelectItem>
+                            <SelectItem value="xray-json">Xray JSON</SelectItem>
+                            <SelectItem value="singbox-json">Sing-box JSON</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <Button 
+                        onClick={() => {
+                          const selectedNodes = nodes.filter(n => n.selected);
+                          if (selectedNodes.length === 0) {
+                            toast({ variant: 'destructive', description: 'Нет выбранных нод' });
+                            return;
+                          }
+                          const output = exportMultipleConfigs(
+                            selectedNodes.map(n => n.config), 
+                            exportFormat
+                          );
+                          copyToClipboard(output, 'bulk-export');
+                        }} 
+                        variant="default" 
+                        className="w-full"
+                      >
                         <Copy className="w-4 h-4 mr-2" />
                         Копировать {selectedCount} ссылок
                       </Button>
-                      <Button onClick={downloadFile} variant="outline" className="w-full">
+                      <Button 
+                        onClick={() => {
+                          const selectedNodes = nodes.filter(n => n.selected);
+                          if (selectedNodes.length === 0) {
+                            toast({ variant: 'destructive', description: 'Нет выбранных нод' });
+                            return;
+                          }
+                          const output = exportMultipleConfigs(
+                            selectedNodes.map(n => n.config), 
+                            exportFormat
+                          );
+                          const ext = exportFormat.includes('json') ? 'json' : 'txt';
+                          const blob = new Blob([output], { type: ext === 'json' ? 'application/json' : 'text/plain' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `vless-nodes-${Date.now()}.${ext}`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast({ description: `Скачано ${selectedNodes.length} нод` });
+                        }} 
+                        variant="outline" 
+                        className="w-full"
+                      >
                         <Download className="w-4 h-4 mr-2" />
                         Скачать файл
                       </Button>
